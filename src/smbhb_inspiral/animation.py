@@ -134,8 +134,8 @@ def _static_hc_background(
 # ---------------------------------------------------------------------------
 
 def make_inspiral_animation(
-    m1_msun: float = 5e8,
-    m2_msun: float = 2e8,
+    m1_msun: float = 7e6,
+    m2_msun: float = 3e6,
     f0_hz: float = 3e-9,
     d_l_mpc: float = 500.0,
     pn_order: int = 1,
@@ -204,10 +204,6 @@ def make_inspiral_animation(
     # ------------------------------------------------------------------
     traj = integrate_inspiral(m1_msun, m2_msun, f0_hz, pn_order=pn_order)
 
-    # Frame indices: evenly spaced across the full trajectory
-    n_traj = len(traj.t)
-    frame_indices = np.linspace(0, n_traj - 1, n_frames, dtype=int)
-
     # Pre-compute full-trajectory h+ and h_c track once
     h_plus_full: npt.NDArray[np.float64] = strain_plus(traj, d_l_mpc)
     f_hc_full, hc_full = characteristic_strain_track(traj, d_l_mpc)
@@ -224,17 +220,74 @@ def make_inspiral_animation(
     voc_max = float(traj.v_over_c.max())
     norm_voc = mcolors.Normalize(vmin=voc_min, vmax=voc_max)
 
-    # Trail length: last N_trail frames worth of orbit steps
-    N_trail = max(1, n_traj // 40)
+    # ------------------------------------------------------------------
+    # Frame schedule: log-spaced in f_GW so each frame advances the chirp
+    # by an equal fractional step in frequency.  Log-spacing in time
+    # concentrates frames near merger by a factor that depends on the chirp
+    # timescale (spanning 5+ orders of magnitude in f in the last 40% of
+    # frames in practice), which makes the visible chirp look unevenly
+    # paced. Log-f spacing gives a uniformly-perceived chirp rate.
+    # ------------------------------------------------------------------
+    t_start = float(traj.t[0])
+    t_end = float(traj.t[-1])
+    f_start = float(traj.f_gw[0])
+    f_end = float(traj.f_gw[-1])
+    log_f_frames = np.linspace(np.log(f_start), np.log(f_end), n_frames)
+    f_gw_frames_requested = np.exp(log_f_frames)
+    # Map back to times by inverting f_gw(t), monotone increasing
+    frame_times = np.interp(f_gw_frames_requested, traj.f_gw, traj.t)
 
-    # Pre-compute BH positions for all trajectory points
-    pos1_all, pos2_all = _bh_positions(traj.phi, m1_msun, m2_msun)
+    # Interpolate physical state onto frame times.  Note: the trajectory
+    # grid is log-spaced in TIME, so its final step covers a huge range in
+    # f and a simultaneously — linearly interpolating traj.a in that last
+    # segment gives values wildly inconsistent with Kepler.  Kepler-derived
+    # a from f is used below where needed.
+    f_gw_frames = f_gw_frames_requested
+    v_over_c_frames = np.interp(frame_times, traj.t, traj.v_over_c)
+    h_c_frames = np.interp(frame_times, traj.t, hc_full)
+    t_norm_frames = frame_times / t_end  # for the f_GW(t) dot
 
-    # h+ waveform: 5-cycle window width in phase units (5 GW cycles = 10π orbital)
-    window_phase = 10.0 * math.pi  # 5 GW cycles
+    # h+ amplitude envelope at each frame, using the direct quadrupole form
+    #     h(t) = 4 G μ ω² r² / (c⁴ D) · sin(2ωt)
+    # with ω = π f_GW (orbital angular frequency, since f_GW = 2 f_orb).
+    # Equivalent to the chirp-mass form under Kepler's law, but kept in this
+    # shape for consistency with the St. Xavier's GR project (Akbari 2024).
+    #
+    # We derive the separation from f_GW via Kepler (rather than interpolating
+    # traj.a) so the amplitude stays self-consistent with the instantaneous
+    # frequency even where the log-spaced trajectory grid is sparse near
+    # merger. Interpolating a and f independently can break their Kepler
+    # relation across the last coalescence step, producing spurious amplitude
+    # spikes and waveform artifacts.
+    from .constants import G as _G, M_SUN, MPC, c as _c  # noqa: PLC0415
+    mu_kg = (m1_msun * m2_msun) / (m1_msun + m2_msun) * M_SUN
+    m_tot_kg = (m1_msun + m2_msun) * M_SUN
+    m_c_kg = traj.chirp_mass_msun * M_SUN
+    d_l_m = d_l_mpc * MPC
+    omega_frames = np.pi * f_gw_frames  # orbital angular frequency [rad/s]
+    a_kepler_frames = (_G * m_tot_kg / omega_frames ** 2) ** (1.0 / 3.0)
+    h_amp_frames = (
+        4.0 * _G * mu_kg * omega_frames ** 2 * a_kepler_frames ** 2
+        / (_c ** 4 * d_l_m)
+    )
+    # Normalized separation for the orbital panel (Kepler-consistent)
+    a_scale_frames = a_kepler_frames / a_kepler_frames[0]
 
-    # Pixel → inch conversion for matplotlib figsize
+    # ------------------------------------------------------------------
+    # Stroboscopic orbital phase for the orbital-plane panel.
+    # Physical phi(t) accumulates ~10^6 rad across the inspiral, so using
+    # it directly aliases for >95% of frames. Instead, we render a visually
+    # smooth rotation at a bounded rate (cycles_per_frame), decoupled from
+    # physical time. The physical chirp is still honestly conveyed by the
+    # f_GW(t) panel, the h_c track, and the v/c colormap.
+    # ------------------------------------------------------------------
+    cycles_per_frame = 1.0 / 12.0  # 12 frames per visual orbit
+    phi_strobe_frames = 2.0 * np.pi * cycles_per_frame * np.arange(n_frames)
+
+    # Pixel → inch conversion for matplotlib figsize. render_scale boosts the
+    # saved PNG resolution without changing the figure layout or font sizes.
     dpi = 100
+    render_scale = 1.6  # output at 1.6x logical resolution (~1280x960 default)
     fig_w_in = figsize[0] / dpi
     fig_h_in = figsize[1] / dpi
 
@@ -243,7 +296,16 @@ def make_inspiral_animation(
     # ------------------------------------------------------------------
     frames: list = []
 
-    for frame_num, idx in enumerate(frame_indices):
+    # Pre-compute stroboscopic BH positions for the orbital panel (constant
+    # unit orbit, visually continuous rotation).
+    pos1_strobe, pos2_strobe = _bh_positions(phi_strobe_frames, m1_msun, m2_msun)
+
+    # Visual trail: last ~0.75 visual orbit at each frame, drawn as a dense
+    # arc so the trail is a smooth curve rather than 5 discrete segments.
+    N_trail_frames = max(1, int(round(0.75 / cycles_per_frame)))
+    arc_resolution = 60  # points per full orbit of trail
+
+    for frame_num in range(n_frames):
         fig, axes = plt.subplots(
             2, 2,
             figsize=(fig_w_in, fig_h_in),
@@ -260,37 +322,66 @@ def make_inspiral_animation(
             axes[0, 0], axes[0, 1], axes[1, 0], axes[1, 1]
         )
 
-        current_voc = float(traj.v_over_c[idx])
+        current_voc = float(v_over_c_frames[frame_num])
+        current_f_gw = float(f_gw_frames[frame_num])
+        current_hc = float(h_c_frames[frame_num])
+        current_h_amp = float(h_amp_frames[frame_num])
+        current_phi_strobe = float(phi_strobe_frames[frame_num])
         bh_color = cmap(norm_voc(current_voc))
 
         # ------------------------------------------------------------------
-        # Panel TL: Orbital plane
+        # Panel TL: Orbital plane (true inspiral — separation shrinks with a(t))
         # ------------------------------------------------------------------
-        trail_start = max(0, idx - N_trail)
-        trail_idx = np.arange(trail_start, idx + 1)
+        # Faint reference circle at initial separation so the viewer can see
+        # the orbit shrink against a fixed-scale backdrop.
+        ref_theta = np.linspace(0.0, 2.0 * np.pi, 180)
+        ref_r1 = m2_msun / (m1_msun + m2_msun)
+        ref_r2 = m1_msun / (m1_msun + m2_msun)
+        ax_orb.plot(ref_r1 * np.cos(ref_theta), ref_r1 * np.sin(ref_theta),
+                    color=colors["bh1"], alpha=0.12, lw=0.6, ls=":")
+        ax_orb.plot(-ref_r2 * np.cos(ref_theta), -ref_r2 * np.sin(ref_theta),
+                    color=colors["bh2"], alpha=0.12, lw=0.6, ls=":")
 
-        if len(trail_idx) > 1:
-            # Fading trail: alpha ramps from 0 → 0.5
-            alphas = np.linspace(0.05, 0.5, len(trail_idx))
-            for k in range(len(trail_idx) - 1):
-                seg = trail_idx[k:k + 2]
+        # Inspiral trail: each past frame k rendered at its own a(t_k) so the
+        # trail is a real shrinking spiral, not a circle.
+        trail_frame_start = max(0, frame_num - N_trail_frames)
+        trail_frames_range = np.arange(trail_frame_start, frame_num + 1)
+        n_interp_per_frame = 6  # sub-samples between consecutive trail frames
+        trail_t = np.linspace(
+            float(trail_frames_range[0]), float(trail_frames_range[-1]),
+            (len(trail_frames_range) - 1) * n_interp_per_frame + 1,
+        )
+        trail_phi = np.interp(trail_t, trail_frames_range.astype(float),
+                              phi_strobe_frames[trail_frames_range])
+        trail_a = np.interp(trail_t, trail_frames_range.astype(float),
+                            a_scale_frames[trail_frames_range])
+        pos1_arc, pos2_arc = _bh_positions(trail_phi, m1_msun, m2_msun)
+        pos1_arc = pos1_arc * trail_a[:, None]
+        pos2_arc = pos2_arc * trail_a[:, None]
+
+        if len(trail_t) > 1:
+            alphas = np.linspace(0.05, 0.55, len(trail_t))
+            for k in range(len(trail_t) - 1):
                 ax_orb.plot(
-                    pos1_all[seg, 0], pos1_all[seg, 1],
-                    color=colors["bh1"], alpha=float(alphas[k]), lw=0.8,
+                    pos1_arc[k:k + 2, 0], pos1_arc[k:k + 2, 1],
+                    color=colors["bh1"], alpha=float(alphas[k]), lw=0.9,
                 )
                 ax_orb.plot(
-                    pos2_all[seg, 0], pos2_all[seg, 1],
-                    color=colors["bh2"], alpha=float(alphas[k]), lw=0.8,
+                    pos2_arc[k:k + 2, 0], pos2_arc[k:k + 2, 1],
+                    color=colors["bh2"], alpha=float(alphas[k]), lw=0.9,
                 )
 
-        # Current BH positions
+        # Current BH positions, scaled by a(t)/a_0
+        current_a_scale = float(a_scale_frames[frame_num])
+        p1_now = pos1_strobe[frame_num] * current_a_scale
+        p2_now = pos2_strobe[frame_num] * current_a_scale
         ax_orb.scatter(
-            [pos1_all[idx, 0]], [pos1_all[idx, 1]],
+            [p1_now[0]], [p1_now[1]],
             s=s1, color=colors["bh1"], edgecolors=bh_color,
             linewidths=1.5, zorder=5,
         )
         ax_orb.scatter(
-            [pos2_all[idx, 0]], [pos2_all[idx, 1]],
+            [p2_now[0]], [p2_now[1]],
             s=s2, color=colors["bh2"], edgecolors=bh_color,
             linewidths=1.5, zorder=5,
         )
@@ -299,7 +390,7 @@ def make_inspiral_animation(
         ax_orb.set_ylim(-0.8, 0.8)
         ax_orb.set_aspect("equal")
         ax_orb.set_title(
-            f"Orbital plane  v/c={current_voc:.3f}",
+            f"Orbital plane  v/c={current_voc:.3f}  a/a₀={current_a_scale:.3f}",
             fontsize=8, color=colors["fg"],
         )
         ax_orb.set_xticks([])
@@ -314,29 +405,33 @@ def make_inspiral_animation(
         cbar.outline.set_edgecolor(colors["fg"])
 
         # ------------------------------------------------------------------
-        # Panel TR: h+ waveform (scrolling ~5 GW cycles)
+        # Panel TR: h+ waveform — 5 GW cycles at the current (instantaneous)
+        # f_GW, reconstructed from the direct quadrupole form
+        #     h(t) = 4 G μ ω² r² / (c⁴ D) · sin(2ωt)
+        # with a from Kepler at the current f.  The chirp (growing amplitude,
+        # shrinking period) is conveyed by watching successive frames rather
+        # than within one frame — this keeps the per-frame display a clean
+        # sinusoid instead of a noisy chirp window.
         # ------------------------------------------------------------------
-        phi_now = float(traj.phi[idx])
-        phi_win_start = phi_now - window_phase
-        mask_wave = traj.phi >= max(phi_win_start, float(traj.phi[0]))
-        mask_wave &= traj.phi <= phi_now
-
-        if np.sum(mask_wave) > 2:
-            t_win = traj.t[mask_wave]
-            h_win = h_plus_full[mask_wave]
-            # Normalize time to [0, 1] within the window for a stable x-axis
-            t_norm = (t_win - t_win[0]) / max(t_win[-1] - t_win[0], 1.0)
-            ax_wave.plot(t_norm, h_win, color=colors["wave"], lw=0.9)
-            h_amp = float(np.abs(h_win).max())
-            if h_amp > 0:
-                ax_wave.set_ylim(-1.4 * h_amp, 1.4 * h_amp)
-
+        n_gw_cycles = 5
+        n_wave_samples = 400
+        tau = np.linspace(0.0, n_gw_cycles / current_f_gw, n_wave_samples)
+        h_wave = current_h_amp * np.sin(
+            2.0 * np.pi * current_f_gw * tau + 2.0 * current_phi_strobe
+        )
+        t_norm = tau / tau[-1]
+        ax_wave.plot(t_norm, h_wave, color=colors["wave"], lw=1.1)
+        global_h_amp = float(np.max(h_amp_frames))
+        ax_wave.set_ylim(-1.4 * global_h_amp, 1.4 * global_h_amp)
         ax_wave.axhline(0, color=colors["grid"], lw=0.5, ls="--")
         ax_wave.set_xlim(0, 1)
-        ax_wave.set_xlabel("Phase window (norm.)", fontsize=6, color=colors["fg"])
+        ax_wave.set_xlabel(
+            f"t  [{n_gw_cycles} GW cycles @ f={current_f_gw:.2e} Hz]",
+            fontsize=6, color=colors["fg"],
+        )
         ax_wave.set_ylabel(r"$h_+$", fontsize=7, color=colors["fg"])
-        ax_wave.set_title(r"Waveform $h_+(t)$ — last 5 cycles", fontsize=8,
-                          color=colors["fg"])
+        ax_wave.set_title(r"Waveform $h_+(t)$ — last 5 GW cycles",
+                          fontsize=8, color=colors["fg"])
 
         # ------------------------------------------------------------------
         # Panel BL: Frequency evolution
@@ -353,23 +448,27 @@ def make_inspiral_animation(
         ax_freq.axhline(f_isco_val, color=colors["isco"], lw=1.0, ls="--",
                         label=f"$f_{{\\rm ISCO}}$={f_isco_val:.1e} Hz")
 
-        # Full trajectory (faint) + portion up to now
-        t_all_norm = traj.t / traj.t[-1]  # normalize to [0,1]
+        # Full trajectory (faint) + portion up to now (by frame time, not index)
+        t_all_norm = traj.t / t_end  # normalize to [0,1]
         ax_freq.plot(t_all_norm, traj.f_gw, color="#333355", lw=0.8, zorder=2)
-        ax_freq.plot(t_all_norm[:idx + 1], traj.f_gw[:idx + 1],
+        mask_past = traj.t <= frame_times[frame_num]
+        ax_freq.plot(t_all_norm[mask_past], traj.f_gw[mask_past],
                      color=colors["fgw"], lw=1.2, zorder=3)
 
-        # Moving dot
+        # Moving dot at current frame time
         ax_freq.scatter(
-            [t_all_norm[idx]], [float(traj.f_gw[idx])],
+            [t_norm_frames[frame_num]], [current_f_gw],
             s=40, color=colors["dot"], zorder=5,
         )
 
-        f_pad = 0.5
-        ax_freq.set_ylim(
-            10 ** (math.log10(float(traj.f_gw[0])) - f_pad),
-            10 ** (math.log10(f_isco_val) + f_pad),
-        )
+        # Axis spans both the PTA and LISA bands so the viewer can see where
+        # this system sits relative to both detectors. For SMBHBs with total
+        # mass ≳ 1e7 M☉, f_ISCO falls below the LISA floor — the empty LISA
+        # band above the track makes that point visually.
+        f_pad = 0.3
+        f_lo = min(float(traj.f_gw[0]), 1e-9) * 10 ** (-f_pad)
+        f_hi = 10 ** (-1 + f_pad)
+        ax_freq.set_ylim(f_lo, f_hi)
         ax_freq.set_xlim(0, 1)
         ax_freq.set_xlabel("Time (normalized)", fontsize=6, color=colors["fg"])
         ax_freq.set_ylabel(r"$f_{\rm GW}$ [Hz]", fontsize=7, color=colors["fg"])
@@ -379,13 +478,12 @@ def make_inspiral_animation(
                        framealpha=0.5)
 
         # ------------------------------------------------------------------
-        # Panel BR: h_c(f) with sensitivity curves + moving dot
+        # Panel BR: h_c(f) with sensitivity curves + moving dot at current f
         # ------------------------------------------------------------------
         _static_hc_background(ax_hc, f_hc_full, hc_full, colors)
 
-        # Moving dot: current position on the h_c track
         ax_hc.scatter(
-            [float(f_hc_full[idx])], [float(hc_full[idx])],
+            [current_f_gw], [current_hc],
             s=45, color=colors["dot"], zorder=6,
         )
 
@@ -409,23 +507,38 @@ def make_inspiral_animation(
         from PIL import Image  # noqa: PLC0415
 
         buf = io.BytesIO()
-        fig.savefig(buf, format="png", dpi=dpi, facecolor=fig.get_facecolor(),
-                    bbox_inches="tight")
+        fig.savefig(buf, format="png", dpi=dpi * render_scale,
+                    facecolor=fig.get_facecolor(), bbox_inches="tight")
         plt.close(fig)
         buf.seek(0)
         frames.append(Image.open(buf).copy())
         buf.close()
 
     # ------------------------------------------------------------------
-    # Save as GIF using Pillow
+    # Save as GIF using Pillow. Per-frame durations: smoothly slow down
+    # the final 30% of frames (up to 3x) so the late-inspiral chirp and
+    # h_c track motion are readable, and hold on the last frame for 2.5 s
+    # before the loop restarts.
     # ------------------------------------------------------------------
     interval_ms = int(1000 / fps)
+    hold_ms = 2500
+    n = len(frames)
+    slow_start = int(0.7 * n)
+    durations: list[int] = []
+    for k in range(n):
+        if k < slow_start:
+            durations.append(interval_ms)
+        else:
+            # Linear ramp from 1x to 3x across the last 30%
+            frac = (k - slow_start) / max(n - slow_start - 1, 1)
+            durations.append(int(interval_ms * (1.0 + 2.0 * frac)))
+    durations[-1] = hold_ms
     frames[0].save(
         outpath,
         format="GIF",
         save_all=True,
         append_images=frames[1:],
-        duration=interval_ms,
+        duration=durations,
         loop=0,
         optimize=True,
     )
