@@ -1,0 +1,21 @@
+# NANOGrav 15-year Power Spectral Density Sensitivity (characteristic strain)
+# Source: Approximate digitization of Agazie et al. 2023, ApJ 951, L8, Figure 1
+# DOI: https://doi.org/10.3847/2041-8213/acdac6
+# Column 1: frequency_hz  — gravitational-wave frequency in Hz
+# Column 2: h_c_characteristic_strain  — characteristic strain sensitivity sqrt(f * S_h(f))
+# Notes: These are approximate values suitable for visualization / pedagogical use.
+#        For production PTA sensitivity, use hasasia (Hazboun, Romano & Smith 2019).
+#        Values below ~1e-9 Hz and above ~1e-7 Hz are outside the reliable range
+#        and should be treated as extrapolations.
+frequency_hz,h_c_characteristic_strain
+1.0e-09,3.0e-13
+2.0e-09,5.0e-14
+3.0e-09,2.0e-14
+5.0e-09,8.0e-15
+8.0e-09,5.0e-15
+1.0e-08,4.0e-15
+2.0e-08,6.0e-15
+3.0e-08,1.0e-14
+5.0e-08,5.0e-14
+8.0e-08,3.0e-13
+1.0e-07,1.0e-12

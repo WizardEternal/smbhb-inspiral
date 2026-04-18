@@ -1,0 +1,9 @@
+cff-version: 1.2.0
+title: smbhb-inspiral
+message: "If you use this software, please cite it as below."
+type: software
+authors:
+  - given-names: Karan
+url: "https://github.com/WizardEternal/smbhb-inspiral"
+license: MIT
+version: 0.1.0
