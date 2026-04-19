@@ -111,7 +111,7 @@ print(result.recovery_sawtooth_stripe82)   # e.g. 0.09
 
 1. **Observer-frame vs source-frame f_ISCO.** My first cut at the band classifier in tng-smbhb-population was using source-frame ISCO frequencies to assign systems to PTA vs LISA vs gap. That inflated the LISA-band counts because high-redshift systems appear at lower observed frequency. Fixed by dividing by (1+z) to get the observer-frame frequency before classifying.
 
-2. **1PN breaks down near merger.** The 1PN correction helps when v/c is around 0.1-0.3 but falls apart as you get close to the ISCO where v/c approaches 0.3 and higher. I noticed the frequency evolution was going nonphysical in the last few orbits. The animation freezes before ISCO rather than trying to continue into a regime where the approximation is actively wrong.
+2. **1PN breaks down near merger.** The 1PN correction helps when v/c is around 0.1-0.3 but falls apart as you get close to the ISCO where v/c approaches 1/sqrt(6) ≈ 0.41. I noticed the frequency evolution was going nonphysical in the last few orbits. The animation freezes before ISCO rather than trying to continue into a regime where the approximation is actively wrong.
 
 ## Limitations
 
@@ -119,7 +119,7 @@ print(result.recovery_sawtooth_stripe82)   # e.g. 0.09
 
 2. **No environmental coupling.** Orbital decay at 0.01-1 pc is driven by stellar scattering and circumbinary gas torques, not GW emission. GW-only evolution is valid only where radiation reaction dominates, roughly below ~0.01 pc for a 10^8 M_sun binary. At larger separations the environment sets the timescale, not the quadrupole formula. See Haiman, Kocsis & Menou (2009).
 
-3. **1PN accuracy breaks down at v/c above 0.3.** The waveform is unreliable in the last few orbits before merger. If you need accurate merger waveforms, use numerical relativity surrogates.
+3. **1PN accuracy breaks down at v/c above ~0.3.** The waveform is unreliable in the last few orbits before merger (the reference system hits v/c = 1/sqrt(6) ≈ 0.41 at ISCO). If you need accurate merger waveforms, use numerical relativity surrogates.
 
 4. **No full cosmological corrections on the GW side.** The EM detectability module applies the (1+z) period correction correctly. But the GW strain and sensitivity comparisons don't apply redshifted-frequency or luminosity-distance corrections beyond the 1/D_L amplitude factor. Source-frame and observer-frame frequencies are not distinguished in the trajectory output.
 

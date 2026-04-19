@@ -230,7 +230,7 @@ def test_trajectory_f_orb_is_half_f_gw(
 def test_trajectory_v_over_c_range(
     reference_trajectory: InspiralTrajectory,
 ) -> None:
-    """v/c should start near 0.025 and end near 0.32 for the reference system."""
+    """v/c should start near 0.032 and end near 0.41 (=1/sqrt(6) at ISCO) for the reference system."""
     traj = reference_trajectory
-    assert traj.v_over_c[0] == pytest.approx(0.025, rel=0.05)
-    assert traj.v_over_c[-1] == pytest.approx(0.324, rel=0.05)
+    assert traj.v_over_c[0] == pytest.approx(0.032, rel=0.05)
+    assert traj.v_over_c[-1] == pytest.approx(0.408, rel=0.05)

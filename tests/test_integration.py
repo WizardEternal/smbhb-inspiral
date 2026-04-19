@@ -155,8 +155,8 @@ def test_hc_at_reference_frequency(pipeline_outputs) -> None:
     # Find the point closest to 1e-8 Hz in the track
     idx = np.argmin(np.abs(pipeline_outputs.f_track - 1e-8))
     hc_val = pipeline_outputs.hc_track[idx]
-    # Verified: ~3.57e-14 at exactly 1e-8 Hz; nearby values will be close
-    assert hc_val == pytest.approx(3.57e-14, rel=0.20)   # generous tolerance for off-grid
+    # Verified: ~6.39e-14 at exactly 1e-8 Hz; nearby values will be close
+    assert hc_val == pytest.approx(6.39e-14, rel=0.20)   # generous tolerance for off-grid
 
 
 def test_hc_positive_everywhere(pipeline_outputs) -> None:

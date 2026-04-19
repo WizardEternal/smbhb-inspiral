@@ -13,7 +13,10 @@ Design decisions
   blit+imshow class of bugs noted in EXECUTION_PLAN §7.1.
 - Orbit radius is *normalized* (unit circle) so the orbital shrinkage is
   conveyed by the companion panels, not by visual collapse in Panel TL.
-- Reference system default is L6: m1=5e8, m2=2e8 M☉, f₀=3 nHz, d_L=500 Mpc.
+- Default masses are m1=7e6, m2=3e6 M☉, f₀=3 nHz, d_L=500 Mpc.  These were
+  chosen so the chirp sweeps through *both* the PTA and LISA bands in one
+  animation (f_ISCO ≈ 4.4e-4 Hz is squarely in the LISA band).  Pass the
+  L6 reference values (m1=5e8, m2=2e8) if you want a PTA-only inspiral.
 
 References
 ----------
@@ -157,9 +160,10 @@ def make_inspiral_animation(
     Parameters
     ----------
     m1_msun : float
-        Primary mass [M_sun]. Default 5×10⁸ (L6 reference system).
+        Primary mass [M_sun]. Default 7×10⁶ (chosen so the chirp sweeps
+        through both PTA and LISA bands in a single animation).
     m2_msun : float
-        Secondary mass [M_sun]. Default 2×10⁸.
+        Secondary mass [M_sun]. Default 3×10⁶.
     f0_hz : float
         Initial GW frequency [Hz]. Default 3 nHz.
     d_l_mpc : float

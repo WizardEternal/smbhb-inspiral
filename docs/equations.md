@@ -131,7 +131,7 @@ the mass ratios relevant to SMBHBs.
 At $f_0 = 3\,\mathrm{nHz}$ with the reference system, $x \approx 4 \times 10^{-4}$
 (weak-field), so the correction is sub-percent.  At ISCO ($f \approx 6\,\mu\mathrm{Hz}$)
 it reaches $\sim\!8\%$, which is why 1PN is the default — the reference system
-reaches $v/c \approx 0.32$ at ISCO, where 0PN is visibly wrong.
+reaches $v/c = 1/\sqrt{6} \approx 0.408$ at ISCO, where 0PN is visibly wrong.
 
 - **Reference:** Blanchet 2014, Living Rev. Relativity **17**, 2 (B14), §7.1, Eq. (234),
   spin-zero limit.
@@ -156,7 +156,7 @@ $$
 
 **Dimensionless orbital velocity:**
 $$
-\frac{v}{c} = \left(\frac{\pi G M_\mathrm{tot} f_\mathrm{GW}}{2\,c^3}\right)^{1/3}
+\frac{v}{c} = \left(\frac{\pi G M_\mathrm{tot} f_\mathrm{GW}}{c^3}\right)^{1/3}
 $$
 
 - **Implemented in:** `src/smbhb_inspiral/physics.py`, function `integrate_inspiral`,
@@ -211,24 +211,27 @@ Under the stationary-phase approximation (SPA) for a quasi-circular, GW-driven
 inspiral, this evaluates to
 
 $$
-h_c(f) = \frac{1}{\pi D_L}
+h_c(f) = \frac{1}{D_L}
           \sqrt{\frac{2}{3}}
-          \frac{(G\mathcal{M}_c)^{5/6}}{c^{3/2}}
-          (\pi f)^{-1/6}
+          \frac{(G\mathcal{M}_c)^{5/6}}{\pi^{2/3}\, c^{3/2}}
+          f^{-1/6}
 $$
 
 The spectrum scales as $h_c \propto f^{-1/6}$, which is a gentle red tilt — much
 flatter than $|\tilde{h}(f)| \propto f^{-7/6}$.
 
-The $\sqrt{2/3}$ prefactor is the RMS sky and inclination average for circularly
-polarized waves (two independent polarizations with equal power), appropriate for
-comparing against PTA / LISA sensitivity curves.
+The $\sqrt{2/3}/\pi^{2/3}$ prefactor encodes the sky, polarization, and inclination
+average for a circular inspiral in the SPA, normalized so that the matched-filter
+signal-to-noise ratio is recovered via $\mathrm{SNR}^2 = \int h_c^2/h_n^2 \,
+\mathrm{d}\ln f$ with $h_n^2(f) = f\,S_n(f)$.  This is the convention used throughout
+the LISA / PTA sensitivity-curve literature (Moore, Cole & Berry 2014, Eq. 14).
 
 **Scope:** the SPA formula assumes the inspiral spends many cycles near each
 frequency, which holds throughout the PTA and LISA bands for SMBHB systems.  It
 is **not** valid during merger or ringdown, which are not modeled by this package.
 
-- **Reference:** Sesana, Vecchio & Colacino 2008, MNRAS 390, 192, Eq. (2);
+- **Reference:** Moore, Cole & Berry 2014, Class. Quantum Grav. 32, 015014, Eq. (14);
+  Sesana, Vecchio & Colacino 2008, MNRAS 390, 192, Eq. (2);
   Flanagan & Hughes 1998, Phys. Rev. D 57, 4535, App. B.
 - **Implemented in:** `src/smbhb_inspiral/waveform.py`, function
   `characteristic_strain_analytic` (line ~329); called by

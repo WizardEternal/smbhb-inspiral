@@ -7,8 +7,11 @@ Usage
     python -m smbhb_inspiral.scripts.make_animation --m1 5e8 --m2 2e8 --f0 3e-9 \\
         --distance 500 --outpath outputs/my_animation.gif
 
-All parameters default to the L6 reference system (m1=5×10⁸, m2=2×10⁸ M☉,
-f₀=3 nHz, d_L=500 Mpc) per EXECUTION_PLAN.md §7.1.
+Defaults match ``make_inspiral_animation``: m1=7×10⁶, m2=3×10⁶ M☉, f₀=3 nHz,
+d_L=500 Mpc.  This system sweeps through *both* the PTA and LISA bands
+(f_ISCO ≈ 4.4×10⁻⁴ Hz is squarely in LISA) so the animation shows the full
+frequency evolution in one clip.  Pass ``--m1 5e8 --m2 2e8`` to render the
+L6 reference system (PTA-only inspiral) instead.
 """
 
 from __future__ import annotations
@@ -25,11 +28,11 @@ def _build_parser() -> argparse.ArgumentParser:
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
     p.add_argument(
-        "--m1", type=float, default=5e8, metavar="M_SUN",
+        "--m1", type=float, default=7e6, metavar="M_SUN",
         help="Primary BH mass [solar masses].",
     )
     p.add_argument(
-        "--m2", type=float, default=2e8, metavar="M_SUN",
+        "--m2", type=float, default=3e6, metavar="M_SUN",
         help="Secondary BH mass [solar masses].",
     )
     p.add_argument(

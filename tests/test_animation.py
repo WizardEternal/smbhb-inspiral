@@ -24,7 +24,7 @@ def test_make_inspiral_animation_renders(tmp_path: Path) -> None:
     """Render a minimal 10-frame animation and assert the GIF exists and is non-empty.
 
     Uses a tiny 320×240 canvas to keep runtime under a few seconds.
-    The L6 reference system defaults are used (m1=5e8, m2=2e8 M☉, f0=3 nHz).
+    The default PTA+LISA sweep system is used (m1=7e6, m2=3e6 M☉, f0=3 nHz).
     """
     import matplotlib
     matplotlib.use("Agg")

@@ -118,18 +118,19 @@ def test_strain_cross_negligible_at_edge_on(reference_trajectory) -> None:
 # ---------------------------------------------------------------------------
 
 def test_hc_analytic_reference() -> None:
-    """Verified value: h_c(1e-8 Hz, M_c=2.6976e8 Msun, d_L=500 Mpc) ≈ 3.57e-14.
+    """Verified value: h_c(1e-8 Hz, M_c=2.6976e8 Msun, d_L=500 Mpc) ≈ 6.39e-14.
 
-    The package uses the sky-averaged SPA formula (Sesana et al. 2008, eq. 2)
-    which includes a sqrt(2/3) inclination-averaging factor; the computed value
-    differs slightly from the on-axis formula but is self-consistent.
+    The package uses the sky-, polarization-, and inclination-averaged SPA
+    formula (Moore, Cole & Berry 2014, Eq. 14; Sesana et al. 2008, Eq. 2),
+    normalized so that SNR^2 = integral h_c^2 / h_n^2 d(ln f) with
+    h_n^2 = f S_n(f).
     """
     hc = characteristic_strain_analytic(
         f_hz=np.array([1e-8]),
         chirp_mass_msun=_MC_REF,
         d_l_mpc=_DL_REF,
     )
-    assert hc[0] == pytest.approx(3.57e-14, rel=0.05)
+    assert hc[0] == pytest.approx(6.39e-14, rel=0.05)
 
 
 def test_hc_scales_inversely_with_distance() -> None:

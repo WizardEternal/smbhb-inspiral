@@ -272,10 +272,10 @@ def characteristic_strain_track(
 
     .. math::
 
-       h_c(f) = \\frac{1}{\\pi D_L}
+       h_c(f) = \\frac{1}{D_L}
                 \\sqrt{\\frac{2}{3}}
-                \\frac{(G\\mathcal{M}_c)^{5/6}}{c^{3/2}}
-                (\\pi f)^{-1/6}
+                \\frac{(G\\mathcal{M}_c)^{5/6}}{\\pi^{2/3}\\, c^{3/2}}
+                f^{-1/6}
 
     Parameters
     ----------
@@ -303,13 +303,16 @@ def characteristic_strain_track(
     :math:`h_c \\propto f^{-1/6}`, which is a gentle red tilt — much flatter
     than the :math:`f^{-7/6}` scaling of :math:`|\\tilde{h}(f)|` itself.
 
-    This function is *inclination-averaged* (i.e., sky- and polarization-
-    averaged over all orientations), as appropriate for sensitivity-curve
-    comparisons.  The :math:`\\sqrt{2/3}` pre-factor encodes this average
-    for circular orbits (Sesana et al. 2008, eq. 2).
+    This function is *sky-, polarization-, and inclination-averaged*
+    over all orientations, as appropriate for sensitivity-curve
+    comparisons.  The :math:`\\sqrt{2/3}/\\pi^{2/3}` prefactor encodes
+    this average for circular orbits in the SPA (Moore, Cole & Berry
+    2014, Eq. 14; equivalent to Sesana et al. 2008, Eq. 2).
 
     References
     ----------
+    Moore, C. J., Cole, R. H. & Berry, C. P. L. (2014).
+        Class. Quantum Grav. 32, 015014.  Equation (14).
     Sesana, A., Vecchio, A., & Colacino, C. N. (2008).
         MNRAS, 390, 192.  Equation (2).
     Flanagan, E. E. & Hughes, S. A. (1998).
@@ -338,13 +341,15 @@ def characteristic_strain_analytic(
 
     .. math::
 
-       h_c(f) = \\frac{1}{\\pi D_L}
+       h_c(f) = \\frac{1}{D_L}
                 \\sqrt{\\frac{2}{3}}
-                \\frac{(G\\mathcal{M}_c)^{5/6}}{c^{3/2}}
-                (\\pi f)^{-1/6}
+                \\frac{(G\\mathcal{M}_c)^{5/6}}{\\pi^{2/3}\\, c^{3/2}}
+                f^{-1/6}
 
-    This form is equivalent to Sesana et al. (2008) eq. (2) and is
-    inclination-averaged for circular orbits.
+    This is the sky-, polarization-, and inclination-averaged
+    characteristic strain for a quasi-circular inspiral in the SPA,
+    matching Moore, Cole & Berry (2014) Eq. 14 and Sesana et al.
+    (2008) Eq. 2.
 
     Parameters
     ----------
@@ -376,12 +381,16 @@ def characteristic_strain_analytic(
                 = m^1          s^{0}             m^{-1}
                 = dimensionless  ✓
 
-    The :math:`\\sqrt{2/3}` factor is the RMS sky and inclination average
-    for circularly polarized waves (two independent polarizations, equal
-    power).
+    The :math:`\\sqrt{2/3}/\\pi^{2/3}` prefactor is the sky-,
+    polarization-, and inclination-averaged SPA result for circular
+    orbits, normalized so that the matched-filter SNR is recovered via
+    :math:`\\mathrm{SNR}^2 = \\int h_c^2 / h_n^2 \\,\\mathrm{d}\\ln f`
+    with :math:`h_n^2(f) = f\\, S_n(f)`.
 
     References
     ----------
+    Moore, C. J., Cole, R. H. & Berry, C. P. L. (2014).
+        Class. Quantum Grav. 32, 015014.  Equation (14).
     Sesana, A., Vecchio, A., & Colacino, C. N. (2008).
         MNRAS, 390, 192.  Equation (2).
     Flanagan, E. E. & Hughes, S. A. (1998).
@@ -398,20 +407,22 @@ def characteristic_strain_analytic(
     gm_c: float = G * m_c_kg              # [m^3 s^{-2}]
     gm_c_pow: float = gm_c ** (5.0 / 6.0)
 
-    # Denominator: pi * D_L * c^{3/2}  [m^{5/2} s^{-3/2}]
+    # Denominator: D_L * c^{3/2} * pi^{2/3}
     c_pow: float = c ** (3.0 / 2.0)
+    pi_pow: float = np.pi ** (2.0 / 3.0)
 
-    # Frequency-dependent factor: (pi f)^{-1/6}
-    pi_f: npt.NDArray[np.float64] = np.pi * f_hz   # [s^{-1}]
-    freq_factor: npt.NDArray[np.float64] = pi_f ** (-1.0 / 6.0)  # [s^{1/6}]
+    # Frequency-dependent factor: f^{-1/6}
+    freq_factor: npt.NDArray[np.float64] = f_hz ** (-1.0 / 6.0)  # [s^{1/6}]
 
-    # Inclination/sky average prefactor for circular orbits
+    # Sky + inclination + polarization average prefactor for circular orbits
+    # (Moore, Cole & Berry 2014, Eq. 14; Sesana et al. 2008, Eq. 2).
     avg_factor: float = np.sqrt(2.0 / 3.0)
 
     h_c: npt.NDArray[np.float64] = (
-        (1.0 / (np.pi * d_l_m))
+        (1.0 / d_l_m)
         * avg_factor
         * (gm_c_pow / c_pow)
+        / pi_pow
         * freq_factor
     )
 

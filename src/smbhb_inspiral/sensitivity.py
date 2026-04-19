@@ -43,6 +43,7 @@ Hazboun, J. S., Romano, J. D., & Smith, T. L. (2019).
 
 from __future__ import annotations
 
+import functools
 import importlib.resources
 from pathlib import Path
 
@@ -249,8 +250,12 @@ def lisa_sensitivity_hc(
 # ---------------------------------------------------------------------------
 
 
+@functools.lru_cache(maxsize=1)
 def _load_nanograv_data() -> tuple[npt.NDArray[np.float64], npt.NDArray[np.float64]]:
     """Load the NANOGrav digitized sensitivity data from the package CSV.
+
+    Cached so animation loops and repeated interpolation calls don't re-parse
+    the CSV on every invocation.
 
     Returns
     -------
@@ -302,7 +307,14 @@ def _load_nanograv_data() -> tuple[npt.NDArray[np.float64], npt.NDArray[np.float
 
     # Ensure ascending frequency order (defensive, CSV is already sorted).
     order = np.argsort(f_hz)
-    return f_hz[order], h_c[order]
+    f_sorted: npt.NDArray[np.float64] = f_hz[order]
+    h_sorted: npt.NDArray[np.float64] = h_c[order]
+
+    # Mark read-only so accidental mutation by a caller doesn't poison the
+    # lru_cache on this function.
+    f_sorted.setflags(write=False)
+    h_sorted.setflags(write=False)
+    return f_sorted, h_sorted
 
 
 def nanograv_15yr_sensitivity_hc() -> (
